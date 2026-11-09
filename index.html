@@ -228,7 +228,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v6";
+const VERSION = "v7";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -261,15 +261,32 @@ async function api(accion, datos = {}) {
   return j;
 }
 
-function ubicar() {
+// Último motivo por el que no se pudo tomar la ubicación (para explicarlo en pantalla).
+let errorGps = "";
+const MOTIVO_GPS = {
+  1: "El permiso de ubicación está bloqueado para Chrome o para esta página.",
+  2: "El celular no encuentra la ubicación (GPS apagado o sin señal).",
+  3: "La ubicación tardó demasiado (pruebe salir al patio o lejos de techos de chapa).",
+  0: "Este navegador no permite usar la ubicación."
+};
+function ubicarUnaVez(precisa, espera) {
   return new Promise(res => {
-    if (!navigator.geolocation) return res(null);
     navigator.geolocation.getCurrentPosition(
-      p => res({ lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) }),
-      () => res(null),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 }
+      p => res({ ok: { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) } }),
+      e => res({ error: e && e.code || 2 }),
+      { enableHighAccuracy: precisa, timeout: espera, maximumAge: 30000 }
     );
   });
+}
+async function ubicar() {
+  errorGps = "";
+  if (!navigator.geolocation || !window.isSecureContext) { errorGps = MOTIVO_GPS[0]; return null; }
+  let r = await ubicarUnaVez(true, 12000);
+  // Si la ubicación precisa no llega, se intenta una aproximada (antenas / wifi).
+  if (r.error && r.error !== 1) r = await ubicarUnaVez(false, 10000);
+  if (r.ok) return r.ok;
+  errorGps = MOTIVO_GPS[r.error] || MOTIVO_GPS[2];
+  return null;
 }
 
 function comprimir(file) {
@@ -380,7 +397,7 @@ $("#p-boton").addEventListener("click", async () => {
     const gps = await ubicar();
     if (!gps && !sinGpsConfirmado) {
       // No marcar sin ubicación por descuido: primero explicar cómo activarla.
-      $("#p-gps").innerHTML = `<b>No se pudo tomar la ubicación.</b> Encienda el GPS del celular y, en Chrome, permita la ubicación para esta página (ícono a la izquierda de la dirección → Permisos → Ubicación → Permitir). Después toque <b>${tipo.toUpperCase()}</b> de nuevo.<br><button type="button" class="link" id="p-sin-gps">Marcar igual sin ubicación</button>`;
+      $("#p-gps").innerHTML = `<b>No se pudo tomar la ubicación.</b> ${esc(errorGps)}<br>Encienda la ubicación del celular y permítala para Chrome y para esta página. Después toque el botón de nuevo.<br><button type="button" class="link" id="p-sin-gps">Marcar igual sin ubicación</button>`;
       return;
     }
     $("#p-gps").textContent = gps ? `Ubicación tomada (±${gps.acc} m)` : "Marcada sin ubicación.";
@@ -412,7 +429,7 @@ async function prepararGps() {
   if (gpsPedido) return; gpsPedido = true;
   const g = await ubicar();
   if (!$("#p-gps").textContent || /Buscando/.test($("#p-gps").textContent)) {
-    $("#p-gps").textContent = g ? `Ubicación activa (±${g.acc} m)` : "Ubicación desactivada: encienda el GPS y permita la ubicación en Chrome antes de marcar.";
+    $("#p-gps").textContent = g ? `Ubicación activa (±${g.acc} m)` : "Sin ubicación: " + errorGps;
   }
 }
 

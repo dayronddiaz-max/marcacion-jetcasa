@@ -228,7 +228,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v7";
+const VERSION = "v8";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -397,7 +397,7 @@ $("#p-boton").addEventListener("click", async () => {
     const gps = await ubicar();
     if (!gps && !sinGpsConfirmado) {
       // No marcar sin ubicación por descuido: primero explicar cómo activarla.
-      $("#p-gps").innerHTML = `<b>No se pudo tomar la ubicación.</b> ${esc(errorGps)}<br>Encienda la ubicación del celular y permítala para Chrome y para esta página. Después toque el botón de nuevo.<br><button type="button" class="link" id="p-sin-gps">Marcar igual sin ubicación</button>`;
+      $("#p-gps").innerHTML = `<b>No se marcó: hace falta la ubicación.</b> ${esc(errorGps)}<br>Encienda la ubicación del celular y permítala para Chrome y para esta página. Después toque el botón de nuevo. Si no lo logra, avise al supervisor para que lo marque.`;
       return;
     }
     $("#p-gps").textContent = gps ? `Ubicación tomada (±${gps.acc} m)` : "Marcada sin ubicación.";
@@ -416,12 +416,6 @@ $("#p-boton").addEventListener("click", async () => {
 
 $("#p-actualizar").onclick = cargarEstado;
 
-// "Marcar igual sin ubicación": el siguiente toque del botón grande marca aunque no haya GPS.
-$("#p-gps").addEventListener("click", e => {
-  if (e.target.id !== "p-sin-gps") return;
-  sinGpsConfirmado = true;
-  $("#p-boton").click();
-});
 
 // Pide el permiso de ubicación apenas se abre la app, para que el aviso de Chrome no aparezca recién al marcar.
 let gpsPedido = false;

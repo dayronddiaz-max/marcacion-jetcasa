@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1b5a86">
-<title>Marcación Jet Casa</title>
+<meta name="theme-color" content="#17867a">
+<title>Marcación Propio</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icono-192.png">
 <link rel="apple-touch-icon" href="icono-192.png">
@@ -14,8 +14,8 @@
 <style>
 :root{
   --bg:#eceeec; --surface:#fbfcfb; --surface-2:#e2e5e2; --ink:#1a1e1c; --muted:#58615c; --line:#cdd2ce;
-  --accent:#1b5a86; --accent-ink:#fff; --ok:#2c7a47; --ok-ink:#fff; --warn:#9a5800; --bad:#b0281f;
-  --ok-bg:#dcefe2; --warn-bg:#f5e6cc; --bad-bg:#f6dcd9; --fab-bg:#dce7f0;
+  --accent:#14766b; --accent-ink:#fff; --ok:#17867a; --ok-ink:#fff; --warn:#9a5800; --bad:#c2402f;
+  --ok-bg:#d8f0ec; --warn-bg:#fbe7cf; --bad-bg:#f8dcd6; --fab-bg:#d8f0ec; --naranja:#f0912f;
   --f-disp:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
@@ -23,8 +23,8 @@
 }
 @media (prefers-color-scheme: dark){:root{
   --bg:#121514; --surface:#1a1e1c; --surface-2:#242926; --ink:#e6eae7; --muted:#9aa49e; --line:#333a35;
-  --accent:#72b4e0; --accent-ink:#0b1822; --ok:#5cc184; --ok-ink:#0b1a10; --warn:#e6a84d; --bad:#f08178;
-  --ok-bg:#1b3425; --warn-bg:#3a2b13; --bad-bg:#3d1d1a; --fab-bg:#1c3244; color-scheme:dark}}
+  --accent:#4fd1bf; --accent-ink:#08201c; --ok:#2fb3a2; --ok-ink:#06201c; --warn:#e6a84d; --bad:#f08178;
+  --ok-bg:#163a35; --warn-bg:#3a2b13; --bad-bg:#3d1d1a; --fab-bg:#163a35; --naranja:#f5a650; color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
 body{padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
@@ -32,8 +32,10 @@ body{padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 main{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-top:16px}
-header.marca{display:flex;align-items:center;justify-content:space-between;gap:12px}
-header.marca h1{font-family:var(--f-disp);font-weight:700;font-size:24px;margin:0;letter-spacing:.01em}
+header.marca{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:3px solid var(--naranja);padding-bottom:10px}
+header.marca .logo{height:52px;width:auto;background:#fff;border-radius:10px;padding:4px 6px}
+header.marca .titulo{text-align:right;display:flex;flex-direction:column}
+header.marca h1{font-family:var(--f-disp);font-weight:700;font-size:26px;margin:0;letter-spacing:.01em;line-height:1;color:var(--accent)}
 header.marca span{font-size:13px;color:var(--muted)}
 .tarjeta{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px}
 .tarjeta h2{font-family:var(--f-disp);font-size:24px;font-weight:600;margin:0;line-height:1.15}
@@ -89,7 +91,10 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 </head>
 <body>
 <main>
-  <header class="marca"><h1>Marcación Jet Casa</h1><span id="version"></span></header>
+  <header class="marca">
+    <img class="logo" src="logo-propio.png" alt="Propio, facilitadores de viviendas" width="192" height="74">
+    <div class="titulo"><h1>Marcación</h1><span>Propio SAE · <span id="version"></span></span></div>
+  </header>
   <div id="aviso" class="aviso" hidden></div>
 
   <!-- Registro del celular -->
@@ -197,7 +202,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v1";
+const VERSION = "v2";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));

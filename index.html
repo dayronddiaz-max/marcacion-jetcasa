@@ -48,7 +48,8 @@ header.marca span{font-size:13px;color:var(--muted)}
 .btn:disabled{opacity:.5}
 .link{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px;cursor:pointer}
 .reloj{font-family:var(--f-mono);font-size:56px;line-height:1;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.fecha{text-align:center;color:var(--muted);text-transform:capitalize;margin-top:-6px}
+.fecha{text-align:center;color:var(--muted);margin-top:-6px}
+.fecha::first-letter{text-transform:uppercase}
 .hola{font-size:18px}
 .hola b{font-weight:600}
 .grande{width:100%;min-height:120px;border-radius:18px;border:0;font-family:var(--f-disp);font-weight:700;font-size:44px;letter-spacing:.04em;cursor:pointer;color:var(--ok-ink);background:var(--ok);box-shadow:0 2px 0 rgba(0,0,0,.15)}
@@ -66,7 +67,8 @@ header.marca span{font-size:13px;color:var(--muted)}
 .radios label{border:1px solid var(--line);border-radius:10px;padding:12px 6px;text-align:center;font-weight:600;cursor:pointer;background:var(--surface)}
 .radios input{position:absolute;opacity:0;pointer-events:none}
 .radios label:has(input:checked){border-color:var(--accent);background:var(--fab-bg);color:var(--accent)}
-.dos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.dos input{min-width:0;font-size:16px;padding:12px 8px}
 .foto-prev{max-width:100%;border-radius:10px;border:1px solid var(--line)}
 .acciones{display:flex;gap:10px;flex-wrap:wrap}
 .acciones .btn{flex:1 1 140px}
@@ -226,7 +228,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v4";
+const VERSION = "v5";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));

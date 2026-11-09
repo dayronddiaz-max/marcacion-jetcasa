@@ -1,0 +1,16 @@
+{
+  "name": "Marcación Jet Casa",
+  "short_name": "Marcación",
+  "description": "Marcar entrada y salida y avisar reposos o permisos.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eceeec",
+  "theme_color": "#1b5a86",
+  "icons": [
+    { "src": "icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

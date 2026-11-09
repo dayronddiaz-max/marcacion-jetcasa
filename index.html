@@ -114,6 +114,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
       <div class="reloj" id="p-reloj">--:--</div>
       <div class="fecha" id="p-fecha"></div>
       <div id="p-ausencia-hoy" class="aviso ok" hidden></div>
+      <div id="p-susp" class="aviso" hidden></div>
       <button class="grande" id="p-boton" type="button">ENTRADA</button>
       <p class="nota" id="p-gps" style="text-align:center"></p>
     </div>
@@ -145,6 +146,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
           <input type="date" id="sup-fecha" class="btn chico" aria-label="Fecha">
         </div>
         <div class="resumen-n" id="sup-cuenta"></div>
+        <div id="sup-susp" style="display:flex;flex-direction:column;gap:8px"></div>
         <label class="campo">Buscar<input id="sup-buscar" type="search" placeholder="Nombre o cédula"></label>
       </div>
       <div class="tarjeta" id="sup-lista"></div>
@@ -185,6 +187,28 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
   </form>
 </dialog>
 
+<!-- Suspender jornada (solo gerente) -->
+<dialog id="d-susp">
+  <form id="f-susp" method="dialog">
+    <h2 style="font-family:var(--f-disp);font-size:24px;margin:0">Suspender jornada</h2>
+    <p class="nota" id="susp-fecha"></p>
+    <p class="nota">Quien marcó en la fábrica ese día cobra la jornada completa. Solo el gerente puede autorizarlo.</p>
+    <div class="radios" role="radiogroup" aria-label="Motivo de la suspensión" style="grid-template-columns:1fr 1fr">
+      <label><input type="radio" name="smotivo" value="Lluvia" checked>Lluvia</label>
+      <label><input type="radio" name="smotivo" value="Falta de material">Falta de material</label>
+      <label><input type="radio" name="smotivo" value="Rotura de equipo">Rotura de equipo</label>
+      <label><input type="radio" name="smotivo" value="Otro">Otro</label>
+    </div>
+    <label class="campo">Hora de liberación<input type="time" id="susp-hora" required></label>
+    <label class="campo">Comentario (opcional)<input type="text" id="susp-nota" maxlength="300"></label>
+    <label class="campo">PIN de gerente<input type="password" id="susp-pin" inputmode="numeric" autocomplete="off" required></label>
+    <div class="acciones">
+      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn pri" id="susp-ok" value="ok">Suspender</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Marca del supervisor -->
 <dialog id="d-sup-marca">
   <form method="dialog">
@@ -202,7 +226,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v2";
+const VERSION = "v3";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -296,6 +320,9 @@ function pintarPrincipal() {
   $("#p-marcas").innerHTML = e.marcas.length
     ? e.marcas.map(m => `<div class="marca-f"><span><b>${esc(m.tipo)}</b> <span class="mono">${esc(m.hora)}</span></span>${pillControl(m.control)}</div>`).join("")
     : `<p class="nota">Todavía no marcó hoy.</p>`;
+  const s = e.suspension;
+  $("#p-susp").hidden = !s;
+  if (s) $("#p-susp").textContent = `Jornada suspendida por ${s.motivo.toLowerCase()} a las ${s.hora}.` + (e.siguiente === "Salida" ? " Marque su salida antes de irse." : "");
   const a = (e.ausencias || []).find(x => x.desde <= e.fecha && x.hasta >= e.fecha);
   $("#p-ausencia-hoy").hidden = !a;
   if (a) $("#p-ausencia-hoy").textContent = `${a.motivo} cargado del ${a.desde.split("-").reverse().join("/")} al ${a.hasta.split("-").reverse().join("/")}.`;
@@ -452,6 +479,12 @@ function pintarSup() {
   });
   $("#sup-cuenta").innerHTML = [["Vinieron", vinieron], ["Adentro", ahoraAdentro], ["Ausencia", ausentes], ["Sin marcar", sin]]
     .map(([t, n]) => `<div><b>${n}</b><span>${t}</span></div>`).join("");
+  const s = d.suspension;
+  quitarConfirmado = false;
+  $("#sup-susp").innerHTML = s
+    ? `<div class="aviso">Jornada suspendida por <b>${esc(s.motivo.toLowerCase())}</b> a las ${esc(s.hora)}${s.nota ? " · " + esc(s.nota) : ""}. Los que marcaron en la fábrica cobran la jornada completa.</div>
+       <button class="btn chico" type="button" id="sup-quitar-susp">Quitar suspensión (PIN de gerente)</button>`
+    : `<button class="btn" type="button" id="sup-suspender">Suspender jornada (lluvia, falta de material…)</button>`;
   const lista = d.operarios.filter(o => !q || (o.nombre + " " + o.cedula).toLowerCase().includes(q));
   $("#sup-lista").innerHTML = lista.map(o => {
     const sig = o.marcas.length % 2 === 0 ? "Entrada" : "Salida";
@@ -470,6 +503,49 @@ function pintarSup() {
 }
 
 $("#sup-fecha").addEventListener("change", e => { SUP.fecha = e.target.value || isoHoy(); cargarSup(); });
+
+/* Suspensión de jornada: la autoriza el gerente con su PIN */
+let quitarConfirmado = false;
+$("#sup-susp").addEventListener("click", async e => {
+  if (e.target.id === "sup-suspender") {
+    $("#susp-fecha").textContent = fechaLarga(SUP.fecha);
+    $("#susp-hora").value = SUP.fecha === isoHoy() ? ahora() : "10:00";
+    $("#susp-nota").value = ""; $("#susp-pin").value = "";
+    document.querySelector('input[name="smotivo"][value="Lluvia"]').checked = true;
+    $("#d-susp").returnValue = "";
+    $("#d-susp").showModal();
+  }
+  if (e.target.id === "sup-quitar-susp") {
+    const b = e.target;
+    if (!quitarConfirmado) {
+      quitarConfirmado = true;
+      b.insertAdjacentHTML("afterend", `<label class="campo" id="quitar-pin-c">PIN de gerente<input type="password" id="quitar-pin" inputmode="numeric" autocomplete="off"></label>`);
+      b.textContent = "Confirmar: quitar suspensión";
+      $("#quitar-pin").focus();
+      return;
+    }
+    try {
+      await api("sup_quitar_suspension", { pin: SUP.pin, pin_gerente: $("#quitar-pin").value, fecha: SUP.fecha });
+      quitarConfirmado = false;
+      aviso("Suspensión quitada. El día vuelve a contarse normal.", "ok");
+      cargarSup();
+    } catch (err) { aviso(err.message, "err"); }
+  }
+});
+$("#f-susp").addEventListener("submit", async ev => {
+  if (ev.submitter && ev.submitter.value === "cancel") return;
+  ev.preventDefault();
+  const btn = $("#susp-ok"); btn.disabled = true;
+  try {
+    const motivo = document.querySelector('input[name="smotivo"]:checked').value;
+    await api("sup_suspender", { pin: SUP.pin, pin_gerente: $("#susp-pin").value, fecha: SUP.fecha, motivo, hora: $("#susp-hora").value, nota: $("#susp-nota").value });
+    $("#d-susp").close("ok");
+    aviso(`Jornada suspendida por ${motivo.toLowerCase()} a las ${$("#susp-hora").value}.`, "ok");
+    quitarConfirmado = false;
+    cargarSup();
+  } catch (err) { aviso(err.message, "err"); }
+  finally { btn.disabled = false; }
+});
 $("#sup-buscar").addEventListener("input", e => { SUP.buscar = e.target.value; if (SUP.datos) pintarSup(); });
 
 let confirmLiberar = null;

@@ -226,7 +226,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v3";
+const VERSION = "v4";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -343,6 +343,7 @@ async function cargarEstado() {
     EST = await api("estado", { token });
     pintarPrincipal();
     aviso("");
+    prepararGps();
   } catch (err) {
     if (/no está registrado/.test(err.message)) { guardar("jc_token", null); mostrar("registro"); }
     aviso(err.message, "err");
@@ -363,6 +364,7 @@ $("#f-registro").addEventListener("submit", async ev => {
   finally { btn.disabled = false; }
 });
 
+let sinGpsConfirmado = false;
 $("#p-boton").addEventListener("click", async () => {
   const b = $("#p-boton");
   const tipo = b.dataset.tipo;
@@ -370,7 +372,13 @@ $("#p-boton").addEventListener("click", async () => {
   $("#p-gps").textContent = "Buscando ubicación…";
   try {
     const gps = await ubicar();
-    $("#p-gps").textContent = gps ? `Ubicación tomada (±${gps.acc} m)` : "No se pudo tomar la ubicación. Active el GPS y dé permiso a la página.";
+    if (!gps && !sinGpsConfirmado) {
+      // No marcar sin ubicación por descuido: primero explicar cómo activarla.
+      $("#p-gps").innerHTML = `<b>No se pudo tomar la ubicación.</b> Encienda el GPS del celular y, en Chrome, permita la ubicación para esta página (ícono a la izquierda de la dirección → Permisos → Ubicación → Permitir). Después toque <b>${tipo.toUpperCase()}</b> de nuevo.<br><button type="button" class="link" id="p-sin-gps">Marcar igual sin ubicación</button>`;
+      return;
+    }
+    $("#p-gps").textContent = gps ? `Ubicación tomada (±${gps.acc} m)` : "Marcada sin ubicación.";
+    sinGpsConfirmado = false;
     const r = await api("marcar", { token: leer("jc_token"), tipo, gps });
     let txt = `${r.tipo} marcada a las ${r.hora}.`;
     if (r.control === "FUERA DE FÁBRICA") txt += ` Ojo: quedó registrada fuera de la fábrica (a ${r.distancia} m).`;
@@ -383,6 +391,23 @@ $("#p-boton").addEventListener("click", async () => {
 });
 
 $("#p-actualizar").onclick = cargarEstado;
+
+// "Marcar igual sin ubicación": el siguiente toque del botón grande marca aunque no haya GPS.
+$("#p-gps").addEventListener("click", e => {
+  if (e.target.id !== "p-sin-gps") return;
+  sinGpsConfirmado = true;
+  $("#p-boton").click();
+});
+
+// Pide el permiso de ubicación apenas se abre la app, para que el aviso de Chrome no aparezca recién al marcar.
+let gpsPedido = false;
+async function prepararGps() {
+  if (gpsPedido) return; gpsPedido = true;
+  const g = await ubicar();
+  if (!$("#p-gps").textContent || /Buscando/.test($("#p-gps").textContent)) {
+    $("#p-gps").textContent = g ? `Ubicación activa (±${g.acc} m)` : "Ubicación desactivada: encienda el GPS y permita la ubicación en Chrome antes de marcar.";
+  }
+}
 
 /* ---------------- ausencias ---------------- */
 let ausPara = null; // null = el operario; {cedula, nombre} = lo carga el supervisor

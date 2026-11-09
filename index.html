@@ -228,7 +228,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v5";
+const VERSION = "v6";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -316,11 +316,15 @@ function pintarPrincipal() {
   $("#p-fecha").textContent = fechaLarga(e.fecha);
   const b = $("#p-boton");
   const sig = e.siguiente;
-  b.innerHTML = sig === "Entrada" ? "ENTRADA<small>Tocar para marcar la entrada</small>" : "SALIDA<small>Tocar para marcar la salida</small>";
+  const et = e.etiqueta || sig.toUpperCase();
+  const ayuda = { "ENTRADA": "Al llegar a la fábrica", "SALIDA AL ALMUERZO": "Al salir a almorzar", "REGRESO DEL ALMUERZO": "Al volver del almuerzo", "SALIDA": "Al terminar la jornada" }[et] || "Tocar para marcar";
+  b.innerHTML = esc(et) + "<small>" + esc(ayuda) + "</small>";
+  b.style.fontSize = et.length > 12 ? "34px" : "";
   b.classList.toggle("salida", sig === "Salida");
   b.dataset.tipo = sig;
+  const nombres4 = ["Entrada", "Salida al almuerzo", "Regreso del almuerzo", "Salida"];
   $("#p-marcas").innerHTML = e.marcas.length
-    ? e.marcas.map(m => `<div class="marca-f"><span><b>${esc(m.tipo)}</b> <span class="mono">${esc(m.hora)}</span></span>${pillControl(m.control)}</div>`).join("")
+    ? e.marcas.map((m, i) => `<div class="marca-f"><span><b>${esc(e.esperadas === 4 && i < 4 ? nombres4[i] : m.tipo)}</b> <span class="mono">${esc(m.hora)}</span></span>${pillControl(m.control)}</div>`).join("")
     : `<p class="nota">Todavía no marcó hoy.</p>`;
   const s = e.suspension;
   $("#p-susp").hidden = !s;
@@ -382,7 +386,8 @@ $("#p-boton").addEventListener("click", async () => {
     $("#p-gps").textContent = gps ? `Ubicación tomada (±${gps.acc} m)` : "Marcada sin ubicación.";
     sinGpsConfirmado = false;
     const r = await api("marcar", { token: leer("jc_token"), tipo, gps });
-    let txt = `${r.tipo} marcada a las ${r.hora}.`;
+    const etq = (EST && EST.etiqueta) ? EST.etiqueta.charAt(0) + EST.etiqueta.slice(1).toLowerCase() : r.tipo;
+    let txt = `${etq} marcada a las ${r.hora}.`;
     if (r.control === "FUERA DE FÁBRICA") txt += ` Ojo: quedó registrada fuera de la fábrica (a ${r.distancia} m).`;
     if (r.control === "SIN GPS") txt += " Quedó registrada sin ubicación.";
     aviso(txt, r.control === "FUERA DE FÁBRICA" || r.control === "SIN GPS" ? "" : "ok");

@@ -154,6 +154,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
       <div class="tarjeta" id="sup-lista"></div>
       <div class="tarjeta">
         <h2>Herramientas</h2>
+        <button class="btn" id="sup-alta" type="button">Dar de alta un operario</button>
         <button class="btn" id="sup-resumen" type="button">Actualizar resumen del mes para RRHH</button>
         <a class="btn" id="sup-planilla" target="_blank" rel="noopener" hidden>Abrir la planilla</a>
         <button class="btn" id="sup-fabrica" type="button">Fijar ubicación de la fábrica (estando en la fábrica)</button>
@@ -211,6 +212,20 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
   </form>
 </dialog>
 
+<!-- Alta de operario (supervisor) -->
+<dialog id="d-alta">
+  <form id="f-alta" method="dialog">
+    <h2 style="font-family:var(--f-disp);font-size:24px;margin:0">Dar de alta un operario</h2>
+    <label class="campo">Número de cédula<input id="alta-cedula" inputmode="numeric" autocomplete="off" required></label>
+    <label class="campo">Apellidos, nombres<input id="alta-nombre" autocomplete="off" required placeholder="Ej.: PÉREZ GÓMEZ, JUAN"></label>
+    <label class="campo">Sector o puesto (opcional)<input id="alta-sector" autocomplete="off"></label>
+    <div class="acciones">
+      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn pri" id="alta-ok" value="ok">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Marca del supervisor -->
 <dialog id="d-sup-marca">
   <form method="dialog">
@@ -228,7 +243,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v8";
+const VERSION = "v9";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -622,6 +637,24 @@ $("#sup-lista").addEventListener("click", async e => {
     confirmLiberar = null;
     try { await api("sup_liberar", { pin: SUP.pin, cedula: o.cedula }); aviso("Celular liberado. " + o.nombre + " puede registrar uno nuevo.", "ok"); cargarSup(); } catch (err) { aviso(err.message, "err"); }
   }
+});
+
+$("#sup-alta").onclick = () => {
+  ["#alta-cedula", "#alta-nombre", "#alta-sector"].forEach(s => { $(s).value = ""; });
+  $("#d-alta").returnValue = "";
+  $("#d-alta").showModal();
+};
+$("#f-alta").addEventListener("submit", async ev => {
+  if (ev.submitter && ev.submitter.value === "cancel") return;
+  ev.preventDefault();
+  const btn = $("#alta-ok"); btn.disabled = true;
+  try {
+    const r = await api("sup_alta", { pin: SUP.pin, cedula: $("#alta-cedula").value, nombre: $("#alta-nombre").value, sector: $("#alta-sector").value });
+    $("#d-alta").close("ok");
+    aviso(r.reactivado ? r.reactivado + " estaba inactivo: quedó activo de nuevo." : r.alta + " quedó dado de alta. Ya puede registrar su celular.", "ok");
+    cargarSup();
+  } catch (err) { aviso(err.message, "err"); }
+  finally { btn.disabled = false; }
 });
 
 $("#sup-resumen").onclick = async () => {

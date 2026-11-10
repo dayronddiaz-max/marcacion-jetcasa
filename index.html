@@ -78,6 +78,7 @@ header.marca span{font-size:13px;color:var(--muted)}
 .sup-op .cab{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .sup-op .cab b{font-weight:600}
 .sup-op .cab small{color:var(--muted)}
+.sup-op .cab b.rojo{color:var(--bad)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;gap:6px;align-items:center;font-size:13px;padding:4px 8px;border-radius:8px;background:var(--surface-2)}
 .chip button{border:0;background:none;color:var(--bad);font-size:12px;cursor:pointer;padding:0 2px;text-decoration:underline}
@@ -243,7 +244,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v9";
+const VERSION = "v10";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -335,10 +336,11 @@ function mostrar(v) {
 let EST = null;
 let reloj = null;
 
-function pillControl(c) {
+function pillControl(c, dist) {
   if (!c) return "";
   const cls = c === "EN FÁBRICA" ? "ok" : c === "FUERA DE FÁBRICA" ? "bad" : c === "MARCADO POR SUPERVISOR" ? "info" : "warn";
-  const t = { "EN FÁBRICA": "En fábrica", "FUERA DE FÁBRICA": "Fuera de fábrica", "SIN GPS": "Sin ubicación", "FÁBRICA SIN UBICAR": "Registrada", "MARCADO POR SUPERVISOR": "Supervisor" }[c] || c;
+  let t = { "EN FÁBRICA": "En fábrica", "FUERA DE FÁBRICA": "Fuera de fábrica", "SIN GPS": "Sin ubicación", "FÁBRICA SIN UBICAR": "Registrada", "MARCADO POR SUPERVISOR": "Supervisor" }[c] || c;
+  if (c === "FUERA DE FÁBRICA" && dist != null) t = "Fuera · a " + (dist >= 1000 ? (dist / 1000).toFixed(1).replace(".", ",") + " km" : dist + " m");
   return `<span class="pill ${cls}">${esc(t)}</span>`;
 }
 
@@ -546,10 +548,10 @@ function pintarSup() {
   const lista = d.operarios.filter(o => !q || (o.nombre + " " + o.cedula).toLowerCase().includes(q));
   $("#sup-lista").innerHTML = lista.map(o => {
     const sig = o.marcas.length % 2 === 0 ? "Entrada" : "Salida";
-    const marcas = o.marcas.map(m => `<span class="chip"><b>${m.tipo === "Entrada" ? "E" : "S"}</b> ${esc(m.hora)} ${pillControl(m.control)}<button type="button" data-anular="${esc(m.id)}" aria-label="Anular marca">anular</button></span>`).join("");
+    const marcas = o.marcas.map(m => `<span class="chip"><b>${m.tipo === "Entrada" ? "E" : "S"}</b> ${esc(m.hora)} ${pillControl(m.control, m.distancia)}<button type="button" data-anular="${esc(m.id)}" aria-label="Anular marca">anular</button></span>`).join("");
     const aus = o.ausencia ? `<span class="pill warn">${esc(o.ausencia.motivo)}</span>${o.ausencia.archivo ? ` <a href="${esc(o.ausencia.archivo)}" target="_blank" rel="noopener">ver certificado</a>` : ""}` : "";
     return `<div class="sup-op" data-ced="${esc(o.cedula)}">
-      <div class="cab"><b>${esc(o.nombre)}</b><small>${esc(o.cedula)}${o.celular ? " · con celular" : " · sin celular"}</small></div>
+      <div class="cab"><b class="${o.fuera ? "rojo" : ""}">${o.fuera ? "⚠ " : ""}${esc(o.nombre)}</b><small>${esc(o.cedula)}${o.celular ? " · con celular" : " · sin celular"}</small></div>
       ${marcas || aus ? `<div class="chips">${marcas}${aus}</div>` : ""}
       <div class="acciones">
         <button class="btn chico ${sig === "Entrada" ? "pri" : ""}" data-marcar="${sig}">${sig}</button>

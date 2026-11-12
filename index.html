@@ -155,6 +155,13 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
       </div>
       <div class="tarjeta" id="sup-lista"></div>
       <div class="tarjeta">
+        <h2>Horas extra y compensaciones</h2>
+        <p class="nota">Las horas extra no se pagan hasta que el gerente las autorice. Compensar: 1 h extra = 1 h libre, que se usa para entrar más tarde, salir antes o tomarse un día.</p>
+        <label class="campo">PIN de gerente<input type="password" id="ger-pin" inputmode="numeric" autocomplete="off"></label>
+        <button class="btn" id="sup-extras-ver" type="button">Ver horas extra por autorizar y saldos</button>
+        <div id="sup-extras" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+      <div class="tarjeta">
         <h2>Herramientas</h2>
         <button class="btn" id="sup-alta" type="button">Dar de alta un operario</button>
         <button class="btn" id="sup-resumen" type="button">Actualizar resumen del mes para RRHH</button>
@@ -228,6 +235,26 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
   </form>
 </dialog>
 
+<!-- Usar saldo a compensar (solo gerente) -->
+<dialog id="d-comp">
+  <form id="f-comp" method="dialog">
+    <h2 style="font-family:var(--f-disp);font-size:24px;margin:0">Usar horas a compensar</h2>
+    <p class="nota" id="comp-quien"></p>
+    <label class="campo">Día<input type="date" id="comp-fecha" required></label>
+    <div class="radios" role="radiogroup" aria-label="Cómo compensa" style="grid-template-columns:1fr 1fr">
+      <label><input type="radio" name="ctipo" value="horas" checked>Entra más tarde o sale antes</label>
+      <label><input type="radio" name="ctipo" value="dia">Día libre completo</label>
+    </div>
+    <label class="campo" id="comp-horas-c">Horas (ej.: 2 o 1,5)<input id="comp-horas" inputmode="decimal" autocomplete="off"></label>
+    <label class="campo">Comentario (opcional)<input type="text" id="comp-nota" maxlength="300"></label>
+    <p class="nota">Se descuentan del saldo las horas que cargues. El día no cuenta como llegada tarde ni como falta.</p>
+    <div class="acciones">
+      <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn pri" id="comp-ok" value="ok">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Marca del supervisor -->
 <dialog id="d-sup-marca">
   <form method="dialog">
@@ -245,7 +272,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v12";
+const VERSION = "v13";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -556,12 +583,14 @@ function pintarSup() {
     const marcas = o.marcas.map(m => `<span class="chip"><b>${m.tipo === "Entrada" ? "E" : "S"}</b> ${esc(m.hora)} ${pillControl(m.control, m.distancia)}${m.control === "POR VALIDAR" ? `<button type="button" data-validar="${esc(m.id)}" aria-label="Validar marca">validar</button>` : ""}<button type="button" data-anular="${esc(m.id)}" aria-label="Anular marca">anular</button></span>`).join("");
     const aus = o.ausencia ? `<span class="pill warn">${esc(o.ausencia.motivo)}</span>${o.ausencia.archivo ? ` <a href="${esc(o.ausencia.archivo)}" target="_blank" rel="noopener">ver certificado</a>` : ""}` : "";
     return `<div class="sup-op" data-ced="${esc(o.cedula)}">
-      <div class="cab"><b class="${o.fuera ? "rojo" : ""}">${o.fuera ? "⚠ " : ""}${esc(o.nombre)}</b><small>${esc(o.cedula)}${o.celular ? " · con celular" : " · sin celular"}</small></div>
+      <div class="cab"><b class="${o.fuera ? "rojo" : ""}">${o.fuera ? "⚠ " : ""}${esc(o.nombre)}</b><small>${esc(o.cedula)}${o.celular ? " · con celular" : " · sin celular"}${o.saldo > 0 ? " · saldo a compensar " + horasTxt(o.saldo) : ""}</small></div>
+      ${o.compensa > 0 ? `<div class="chips"><span class="pill info">Compensa ${horasTxt(o.compensa)} hoy</span></div>` : ""}
       ${marcas || aus ? `<div class="chips">${marcas}${aus}</div>` : ""}
       <div class="acciones">
         <button class="btn chico ${sig === "Entrada" ? "pri" : ""}" data-marcar="${sig}">${sig}</button>
         <button class="btn chico" data-aus>Ausencia</button>
         ${o.celular ? `<button class="btn chico" data-liberar>Liberar celular</button>` : ""}
+        ${o.saldo > 0 ? `<button class="btn chico" data-usar-saldo>Usar saldo</button>` : ""}
       </div>
     </div>`;
   }).join("") || `<p class="nota">Nadie coincide con la búsqueda.</p>`;
@@ -613,6 +642,92 @@ $("#f-susp").addEventListener("submit", async ev => {
 });
 $("#sup-buscar").addEventListener("input", e => { SUP.buscar = e.target.value; if (SUP.datos) pintarSup(); });
 
+/* Horas extra por autorizar y saldo a compensar: decide el gerente con su PIN */
+function horasTxt(h) {
+  const t = Math.round(Number(h) * 60), hh = Math.floor(Math.abs(t) / 60), mm = Math.abs(t) % 60;
+  return (t < 0 ? "-" : "") + (hh ? hh + " h" : "") + (hh && mm ? " " : "") + (mm ? mm + " min" : "") || "0 h";
+}
+const pinGer = () => {
+  const p = $("#ger-pin").value.trim();
+  if (!p) { $("#ger-pin").focus(); throw new Error("Escriba el PIN de gerente arriba."); }
+  return p;
+};
+let EXT = null;
+async function cargarExtras() {
+  $("#sup-extras").innerHTML = `<p class="nota">Cargando…</p>`;
+  try { EXT = await api("sup_extras", { pin: SUP.pin }); pintarExtras(); }
+  catch (err) { $("#sup-extras").innerHTML = ""; aviso(err.message, "err"); }
+}
+function pintarExtras() {
+  const p = EXT.pendientes, s = EXT.saldos, u = EXT.usos;
+  $("#sup-extras").innerHTML =
+    `<h3 style="margin:8px 0 0">Por autorizar (${p.length})</h3>` +
+    (p.map(x => `<div class="sup-op" data-ext-ced="${esc(x.cedula)}" data-ext-f="${esc(x.fecha)}">
+      <div class="cab"><b>${esc(x.nombre)}</b><small>${esc(fechaLarga(x.fecha))} · ${esc(x.entradas)} → ${esc(x.salidas)}</small></div>
+      <div><b>${horasTxt(x.horas)} extra</b>${x.noct > 0 ? ` <small>(${horasTxt(x.noct)} nocturnas)</small>` : ""}</div>
+      <div class="acciones">
+        <button class="btn chico pri" data-dec="Pagar">Pagar</button>
+        <button class="btn chico" data-dec="Compensar">Compensar</button>
+        <button class="btn chico" data-dec="No reconocer">No reconocer</button>
+      </div></div>`).join("") || `<p class="nota">No hay horas extra pendientes en los últimos 2 meses.</p>`) +
+    `<h3 style="margin:8px 0 0">Saldo a compensar</h3>` +
+    (s.map(x => `<div class="sup-op" data-sal-ced="${esc(x.cedula)}">
+      <div class="cab"><b>${esc(x.nombre)}</b><small>${x.horas < 0 ? "debe " : ""}${horasTxt(x.horas)}</small></div>
+      ${x.horas > 0 ? `<div class="acciones"><button class="btn chico" data-usar-saldo-ext>Usar saldo</button></div>` : ""}</div>`).join("") || `<p class="nota">Nadie tiene horas a compensar.</p>`) +
+    (u.length ? `<h3 style="margin:8px 0 0">Usos recientes del saldo</h3><div class="chips">` +
+      u.map(x => `<span class="chip">${esc(x.nombre)} · ${esc(fechaLarga(x.fecha))} · ${horasTxt(x.horas)}${x.nota ? " · " + esc(x.nota) : ""}<button type="button" data-anular-comp="${esc(x.id)}">anular</button></span>`).join("") + `</div>` : "");
+}
+$("#sup-extras-ver").onclick = cargarExtras;
+$("#sup-extras").addEventListener("click", async e => {
+  const bd = e.target.closest("[data-dec]");
+  if (bd) {
+    const f = bd.closest("[data-ext-ced]");
+    try {
+      const r = await api("sup_decidir_extra", { pin: SUP.pin, pin_gerente: pinGer(), cedula: f.dataset.extCed, fecha: f.dataset.extF, decision: bd.dataset.dec });
+      aviso(`${r.nombre}: ${horasTxt(r.horas)} extra → ${r.decision.toLowerCase()}.${r.decision === "Compensar" ? " Saldo: " + horasTxt(r.saldo) + "." : ""}`, "ok");
+      cargarExtras(); if (SUP.datos) cargarSup();
+    } catch (err) { aviso(err.message, "err"); }
+    return;
+  }
+  const bu = e.target.closest("[data-usar-saldo-ext]");
+  if (bu) { const ced = bu.closest("[data-sal-ced]").dataset.salCed; const x = EXT.saldos.find(y => y.cedula === ced); abrirComp(x.cedula, x.nombre, x.horas); return; }
+  const ba = e.target.closest("[data-anular-comp]");
+  if (ba) {
+    if (ba.dataset.confirmar !== "1") { ba.dataset.confirmar = "1"; ba.textContent = "¿anular? tocar de nuevo"; return; }
+    try { await api("sup_anular_comp", { pin: SUP.pin, pin_gerente: pinGer(), id: ba.dataset.anularComp }); aviso("Uso del saldo anulado: las horas vuelven al saldo.", "ok"); cargarExtras(); if (SUP.datos) cargarSup(); }
+    catch (err) { aviso(err.message, "err"); }
+  }
+});
+
+let COMP = null;
+function abrirComp(cedula, nombre, saldo) {
+  COMP = { cedula, nombre };
+  $("#comp-quien").textContent = `${nombre} · saldo ${horasTxt(saldo)}`;
+  $("#comp-fecha").value = SUP.fecha;
+  $("#comp-horas").value = ""; $("#comp-nota").value = "";
+  document.querySelector('input[name="ctipo"][value="horas"]').checked = true;
+  $("#comp-horas-c").hidden = false;
+  $("#d-comp").returnValue = "";
+  $("#d-comp").showModal();
+}
+document.querySelectorAll('input[name="ctipo"]').forEach(r => r.addEventListener("change", () => {
+  $("#comp-horas-c").hidden = document.querySelector('input[name="ctipo"]:checked').value === "dia";
+}));
+$("#f-comp").addEventListener("submit", async ev => {
+  if (ev.submitter && ev.submitter.value === "cancel") return;
+  ev.preventDefault();
+  const btn = $("#comp-ok"); btn.disabled = true;
+  try {
+    const tipo = document.querySelector('input[name="ctipo"]:checked').value;
+    const r = await api("sup_compensar", { pin: SUP.pin, pin_gerente: pinGer(), cedula: COMP.cedula, fecha: $("#comp-fecha").value,
+      horas: tipo === "dia" ? "dia" : $("#comp-horas").value, nota: $("#comp-nota").value });
+    $("#d-comp").close("ok");
+    aviso(`${r.nombre}: compensa ${horasTxt(r.horas)}. Le queda ${horasTxt(r.saldo)}.`, "ok");
+    if (EXT) cargarExtras(); cargarSup();
+  } catch (err) { aviso(err.message, "err"); }
+  finally { btn.disabled = false; }
+});
+
 let confirmLiberar = null;
 $("#sup-lista").addEventListener("click", async e => {
   const fila = e.target.closest(".sup-op"); if (!fila) return;
@@ -632,6 +747,7 @@ $("#sup-lista").addEventListener("click", async e => {
     d.showModal(); return;
   }
   if (e.target.closest("[data-aus]")) { abrirAusencia({ cedula: o.cedula, nombre: o.nombre }); $("#aus-desde").value = SUP.fecha; $("#aus-hasta").value = SUP.fecha; return; }
+  if (e.target.closest("[data-usar-saldo]")) { abrirComp(o.cedula, o.nombre, o.saldo); return; }
   const va = e.target.closest("[data-validar]");
   if (va) {
     if (va.dataset.confirmar !== "1") { va.dataset.confirmar = "1"; va.textContent = "¿estaba en fábrica? tocar de nuevo"; return; }

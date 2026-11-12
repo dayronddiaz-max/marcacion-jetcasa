@@ -146,7 +146,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
     <div id="sup-panel" hidden style="display:flex;flex-direction:column;gap:16px">
       <div class="tarjeta">
         <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-          <h2>Parte del día</h2>
+          <div><h2>Parte del día</h2><small class="nota" id="sup-quien"></small></div>
           <input type="date" id="sup-fecha" class="btn chico" aria-label="Fecha">
         </div>
         <div class="resumen-n" id="sup-cuenta"></div>
@@ -245,7 +245,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v11";
+const VERSION = "v12";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -524,6 +524,7 @@ async function cargarSup() {
   $("#sup-lista").innerHTML = `<p class="nota">Cargando…</p>`;
   try {
     SUP.datos = await api("sup_dia", { pin: SUP.pin, fecha: SUP.fecha });
+    $("#sup-quien").textContent = SUP.datos.quien ? "Entraste como " + SUP.datos.quien : "";
     pintarSup();
     const f = SUP.datos.config.fabrica;
     $("#sup-fabrica-txt").textContent = f ? `Fábrica ubicada (radio ${SUP.datos.config.radio} m). Si la volvés a fijar, reemplaza la anterior.` : "Todavía no se fijó la ubicación de la fábrica: las marcas no se pueden controlar por GPS.";
@@ -634,7 +635,7 @@ $("#sup-lista").addEventListener("click", async e => {
   const va = e.target.closest("[data-validar]");
   if (va) {
     if (va.dataset.confirmar !== "1") { va.dataset.confirmar = "1"; va.textContent = "¿estaba en fábrica? tocar de nuevo"; return; }
-    try { await api("sup_validar", { pin: SUP.pin, id: va.dataset.validar }); aviso("Marca validada: cuenta como en fábrica.", "ok"); cargarSup(); } catch (err) { aviso(err.message, "err"); }
+    try { const r = await api("sup_validar", { pin: SUP.pin, id: va.dataset.validar }); aviso("Marca validada por " + r.quien + ": cuenta como en fábrica.", "ok"); cargarSup(); } catch (err) { aviso(err.message, "err"); }
     return;
   }
   const an = e.target.closest("[data-anular]");

@@ -82,6 +82,7 @@ header.marca span{font-size:13px;color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;gap:6px;align-items:center;font-size:13px;padding:4px 8px;border-radius:8px;background:var(--surface-2)}
 .chip button{border:0;background:none;color:var(--bad);font-size:12px;cursor:pointer;padding:0 2px;text-decoration:underline}
+.chip button[data-validar]{color:var(--ok);font-weight:600}
 .resumen-n{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .resumen-n div{background:var(--surface-2);border-radius:10px;padding:8px 4px}
 .resumen-n b{display:block;font-family:var(--f-disp);font-size:26px;line-height:1}
@@ -244,7 +245,7 @@ dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
 "use strict";
 /* Dirección de la API de Google (Apps Script). Se completa al publicar. */
 const API_URL = "https://script.google.com/macros/s/AKfycbxCZyNYeXS2A-PKBPFAFFanPhcUIC2f4O3k9jYkAy7xX0ve-YFlelBim25qgwFXubWscQ/exec";
-const VERSION = "v10";
+const VERSION = "v11";
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -338,9 +339,11 @@ let reloj = null;
 
 function pillControl(c, dist) {
   if (!c) return "";
-  const cls = c === "EN FÁBRICA" ? "ok" : c === "FUERA DE FÁBRICA" ? "bad" : c === "MARCADO POR SUPERVISOR" ? "info" : "warn";
-  let t = { "EN FÁBRICA": "En fábrica", "FUERA DE FÁBRICA": "Fuera de fábrica", "SIN GPS": "Sin ubicación", "FÁBRICA SIN UBICAR": "Registrada", "MARCADO POR SUPERVISOR": "Supervisor" }[c] || c;
-  if (c === "FUERA DE FÁBRICA" && dist != null) t = "Fuera · a " + (dist >= 1000 ? (dist / 1000).toFixed(1).replace(".", ",") + " km" : dist + " m");
+  const cls = c === "EN FÁBRICA" || c === "VALIDADA POR SUPERVISOR" ? "ok" : c === "FUERA DE FÁBRICA" ? "bad" : c === "MARCADO POR SUPERVISOR" ? "info" : "warn";
+  let t = { "EN FÁBRICA": "En fábrica", "FUERA DE FÁBRICA": "Fuera de fábrica", "POR VALIDAR": "Por validar", "VALIDADA POR SUPERVISOR": "Validada", "SIN GPS": "Sin ubicación", "FÁBRICA SIN UBICAR": "Registrada", "MARCADO POR SUPERVISOR": "Supervisor" }[c] || c;
+  const km = d => d >= 1000 ? (d / 1000).toFixed(1).replace(".", ",") + " km" : d + " m";
+  if (c === "FUERA DE FÁBRICA" && dist != null) t = "Fuera · a " + km(dist);
+  if (c === "POR VALIDAR" && dist != null) t = "Por validar · a " + km(dist);
   return `<span class="pill ${cls}">${esc(t)}</span>`;
 }
 
@@ -424,7 +427,8 @@ $("#p-boton").addEventListener("click", async () => {
     let txt = `${etq} marcada a las ${r.hora}.`;
     if (r.control === "FUERA DE FÁBRICA") txt += ` Ojo: quedó registrada fuera de la fábrica (a ${r.distancia} m).`;
     if (r.control === "SIN GPS") txt += " Quedó registrada sin ubicación.";
-    aviso(txt, r.control === "FUERA DE FÁBRICA" || r.control === "SIN GPS" ? "" : "ok");
+    if (r.control === "POR VALIDAR") txt += " La ubicación salió imprecisa: el supervisor tiene que validarla.";
+    aviso(txt, r.control === "FUERA DE FÁBRICA" || r.control === "SIN GPS" || r.control === "POR VALIDAR" ? "" : "ok");
     if (navigator.vibrate) navigator.vibrate(120);
     await cargarEstado();
   } catch (err) { aviso(err.message, "err"); await cargarEstado(); }
@@ -548,7 +552,7 @@ function pintarSup() {
   const lista = d.operarios.filter(o => !q || (o.nombre + " " + o.cedula).toLowerCase().includes(q));
   $("#sup-lista").innerHTML = lista.map(o => {
     const sig = o.marcas.length % 2 === 0 ? "Entrada" : "Salida";
-    const marcas = o.marcas.map(m => `<span class="chip"><b>${m.tipo === "Entrada" ? "E" : "S"}</b> ${esc(m.hora)} ${pillControl(m.control, m.distancia)}<button type="button" data-anular="${esc(m.id)}" aria-label="Anular marca">anular</button></span>`).join("");
+    const marcas = o.marcas.map(m => `<span class="chip"><b>${m.tipo === "Entrada" ? "E" : "S"}</b> ${esc(m.hora)} ${pillControl(m.control, m.distancia)}${m.control === "POR VALIDAR" ? `<button type="button" data-validar="${esc(m.id)}" aria-label="Validar marca">validar</button>` : ""}<button type="button" data-anular="${esc(m.id)}" aria-label="Anular marca">anular</button></span>`).join("");
     const aus = o.ausencia ? `<span class="pill warn">${esc(o.ausencia.motivo)}</span>${o.ausencia.archivo ? ` <a href="${esc(o.ausencia.archivo)}" target="_blank" rel="noopener">ver certificado</a>` : ""}` : "";
     return `<div class="sup-op" data-ced="${esc(o.cedula)}">
       <div class="cab"><b class="${o.fuera ? "rojo" : ""}">${o.fuera ? "⚠ " : ""}${esc(o.nombre)}</b><small>${esc(o.cedula)}${o.celular ? " · con celular" : " · sin celular"}</small></div>
@@ -627,6 +631,12 @@ $("#sup-lista").addEventListener("click", async e => {
     d.showModal(); return;
   }
   if (e.target.closest("[data-aus]")) { abrirAusencia({ cedula: o.cedula, nombre: o.nombre }); $("#aus-desde").value = SUP.fecha; $("#aus-hasta").value = SUP.fecha; return; }
+  const va = e.target.closest("[data-validar]");
+  if (va) {
+    if (va.dataset.confirmar !== "1") { va.dataset.confirmar = "1"; va.textContent = "¿estaba en fábrica? tocar de nuevo"; return; }
+    try { await api("sup_validar", { pin: SUP.pin, id: va.dataset.validar }); aviso("Marca validada: cuenta como en fábrica.", "ok"); cargarSup(); } catch (err) { aviso(err.message, "err"); }
+    return;
+  }
   const an = e.target.closest("[data-anular]");
   if (an) {
     if (an.dataset.confirmar !== "1") { an.dataset.confirmar = "1"; an.textContent = "¿anular? tocar de nuevo"; return; }
